@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Smart.ProxyPilot;
+using Smart.ProxyPilot.Abstractions;
 using Smart.ProxyPilot.Options;
 using Smart.ProxyPilot.Scheduling;
 using Smart.ProxyPilot.Validators;
@@ -15,19 +16,10 @@ var pool = new ProxyPoolBuilder()
         options.CooldownDuration = TimeSpan.FromSeconds(30);
     })
     .AddApiProvider(new Uri("http://bapi.51daili.com/getapi2?linePoolIndex=-1&packid=2&time=1&qty=5&port=1&format=txt&usertype=17&uid=38584"))
+    .UseEventSink(new ConsoleEventSink())
     .UseValidator(new HttpProxyValidator(new HttpProxyValidatorOptions(new Uri("https://httpbin.org/ip"))))
     .UseScheduler(new WeightedScheduler())
     .Build();
-
-pool.ProxyValidated += (_, e) =>
-{
-    Console.WriteLine($"[验证] {e.Proxy} - {e.Result.ResultType} ({e.Result.ResponseTime.TotalMilliseconds:0}ms)");
-};
-
-pool.ProxyStateChanged += (_, e) =>
-{
-    Console.WriteLine($"[状态] {e.Proxy} - {e.OldState} -> {e.NewState}");
-};
 
 await pool.StartAsync();
 
@@ -55,3 +47,21 @@ if (proxy is not null)
 
 await pool.StopAsync();
 await pool.DisposeAsync();
+
+sealed class ConsoleEventSink : IProxyEventSink
+{
+    public void OnProxyValidated(ProxyInfo proxy, ValidationResult result)
+    {
+        Console.WriteLine($"[验证] {proxy} - {result.ResultType} ({result.ResponseTime.TotalMilliseconds:0}ms)");
+    }
+
+    public void OnProxyStateChanged(ProxyInfo proxy, ProxyState oldState, ProxyState newState)
+    {
+        Console.WriteLine($"[状态] {proxy} - {oldState} -> {newState}");
+    }
+
+    public void OnPoolStateChanged(ProxyPoolSnapshot snapshot)
+    {
+        Console.WriteLine($"[池] 可用: {snapshot.AvailableCount}, 验证中: {snapshot.ValidatingCount}");
+    }
+}

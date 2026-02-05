@@ -1,0 +1,60 @@
+<UserControl
+    x:Class="Smart.ProxyPilot.UI.Views.LogView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Smart.ProxyPilot.UI.ViewModels"
+    xmlns:models="using:Smart.ProxyPilot.UI.Models"
+    xmlns:converters="using:Smart.ProxyPilot.UI.Converters"
+    x:DataType="vm:MainViewModel">
+
+  <Design.DataContext>
+    <vm:MainViewModel />
+  </Design.DataContext>
+
+  <Border Classes="Card" Padding="12" Margin="8">
+    <Grid RowDefinitions="Auto,*,Auto">
+      <TextBlock Text="实时日志" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+      <!-- 日志列表 -->
+      <ListBox
+        Grid.Row="1"
+        ItemsSource="{Binding Logs}"
+        BorderThickness="1"
+        BorderBrush="{DynamicResource SemiGrey2}"
+        MaxHeight="200">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="models:LogEntry">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock
+                Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}"
+                Foreground="{DynamicResource SemiGrey5}"
+                FontFamily="Consolas,Menlo,monospace"
+                Width="70" />
+              <TextBlock
+                Text="{Binding Category, StringFormat=[{0}]}"
+                Foreground="{Binding Level, Converter={x:Static converters:LogLevelToColorConverter.Instance}}"
+                FontWeight="SemiBold"
+                Width="60" />
+              <TextBlock
+                Text="{Binding Message}"
+                FontFamily="Consolas,Menlo,monospace" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <!-- 控制栏 -->
+      <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="12" Margin="0,12,0,0">
+        <Button Command="{Binding ClearLogsCommand}" Classes="Tertiary" Content="清空日志" />
+        <CheckBox IsChecked="{Binding AutoScroll}" Content="自动滚动" />
+        <ComboBox SelectedItem="{Binding LogFilter}" PlaceholderText="全部级别" Width="100">
+          <ComboBoxItem Content="全部" />
+          <ComboBoxItem Content="Debug" />
+          <ComboBoxItem Content="Info" />
+          <ComboBoxItem Content="Warning" />
+          <ComboBoxItem Content="Error" />
+        </ComboBox>
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

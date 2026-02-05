@@ -10,8 +10,16 @@ public class ApiProxyProvider(ApiProxyProviderOptions options) : IProxyProvider,
     private readonly HttpClient _client = options.Client ?? new HttpClient();
     private bool _disposed;
 
+    /// <summary>
+    /// 代理源名称。
+    /// </summary>
     public string Name => "Api";
 
+    /// <summary>
+    /// 从 API 获取代理列表。
+    /// </summary>
+    /// <param name="count">数量，<=0 表示返回全部解析结果。</param>
+    /// <param name="ct">取消令牌。</param>
     public async ValueTask<IEnumerable<ProxyInfo>> FetchAsync(int count, CancellationToken ct = default)
     {
         var content = await _client.GetStringAsync(options.ApiUrl, ct).ConfigureAwait(false);
@@ -20,6 +28,9 @@ public class ApiProxyProvider(ApiProxyProviderOptions options) : IProxyProvider,
         return count > 0 ? result.Take(count).ToList() : result.ToList();
     }
 
+    /// <summary>
+    /// 释放资源。
+    /// </summary>
     public void Dispose()
     {
         if (_disposed || options.Client is not null)

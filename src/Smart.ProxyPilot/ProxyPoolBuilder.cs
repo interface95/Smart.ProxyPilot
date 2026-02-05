@@ -67,6 +67,12 @@ public class ProxyPoolBuilder()
     public ProxyPoolBuilder UseStorage<T>() where T : IProxyStorage, new()
         => UseStorage(new T());
 
+    public ProxyPoolBuilder UseEventSink(IProxyEventSink sink)
+    {
+        _options.EventSink = sink;
+        return this;
+    }
+
     public IProxyPool Build()
     {
         if (_providers.Count == 0)

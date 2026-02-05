@@ -5,6 +5,9 @@ namespace Smart.ProxyPilot.Scheduling;
 
 public class WeightedScheduler() : IProxyScheduler
 {
+    /// <summary>
+    /// 按权重选择代理。
+    /// </summary>
     public ProxyInfo? Select(IReadOnlyList<ProxyInfo> proxies)
     {
         if (proxies.Count == 0)
@@ -29,6 +32,9 @@ public class WeightedScheduler() : IProxyScheduler
         return proxies[^1];
     }
 
+    /// <summary>
+    /// 使用结果回调（权重由代理自身统计计算）。
+    /// </summary>
     public void OnProxyUsed(ProxyInfo proxy, bool success, TimeSpan? responseTime)
     {
     }

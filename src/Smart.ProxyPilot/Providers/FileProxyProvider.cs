@@ -6,8 +6,16 @@ namespace Smart.ProxyPilot.Providers;
 
 public class FileProxyProvider(FileProxyProviderOptions options) : IProxyProvider
 {
+    /// <summary>
+    /// 代理源名称。
+    /// </summary>
     public string Name => "File";
 
+    /// <summary>
+    /// 从文件获取代理列表。
+    /// </summary>
+    /// <param name="count">数量，<=0 表示返回全部解析结果。</param>
+    /// <param name="ct">取消令牌。</param>
     public async ValueTask<IEnumerable<ProxyInfo>> FetchAsync(int count, CancellationToken ct = default)
     {
         var content = await File.ReadAllTextAsync(options.FilePath, ct).ConfigureAwait(false);
@@ -18,6 +26,10 @@ public class FileProxyProvider(FileProxyProviderOptions options) : IProxyProvide
         return count > 0 ? proxies.Take(count).ToList() : proxies.ToList();
     }
 
+    /// <summary>
+    /// 默认解析器：支持 ip:port 与 type://ip:port。
+    /// </summary>
+    /// <param name="content">文件内容。</param>
     private static IEnumerable<ProxyInfo> ParseDefault(string content)
     {
         foreach (var raw in content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
@@ -44,6 +56,9 @@ public class FileProxyProvider(FileProxyProviderOptions options) : IProxyProvide
         }
     }
 
+    /// <summary>
+    /// 解析带协议的代理地址。
+    /// </summary>
     private static bool TryParseUri(string line, out ProxyInfo proxy)
     {
         proxy = null!;

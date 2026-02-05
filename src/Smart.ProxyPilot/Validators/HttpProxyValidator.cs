@@ -7,6 +7,12 @@ namespace Smart.ProxyPilot.Validators;
 
 public class HttpProxyValidator(HttpProxyValidatorOptions options) : IProxyValidator
 {
+    /// <summary>
+    /// 验证代理可用性。
+    /// </summary>
+    /// <param name="proxy">待验证代理。</param>
+    /// <param name="ct">取消令牌。</param>
+    /// <returns>验证结果。</returns>
     public async ValueTask<ValidationResult> ValidateAsync(ProxyInfo proxy, CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();

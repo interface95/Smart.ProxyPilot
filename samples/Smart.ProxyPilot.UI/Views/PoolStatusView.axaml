@@ -1,0 +1,75 @@
+<UserControl
+    x:Class="Smart.ProxyPilot.UI.Views.PoolStatusView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Smart.ProxyPilot.UI.ViewModels"
+    x:DataType="vm:PoolStatusViewModel">
+
+  <Design.DataContext>
+    <vm:PoolStatusViewModel />
+  </Design.DataContext>
+
+  <Border Classes="Card" Padding="16" Margin="8">
+    <StackPanel Spacing="12">
+      <TextBlock Text="状态概览" FontSize="16" FontWeight="SemiBold" />
+
+      <UniformGrid Columns="5" Margin="0,8,0,0">
+        <!-- 总数 -->
+        <Border Classes="Card" Padding="12" Margin="4">
+          <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="总数" Foreground="{DynamicResource SemiGrey6}" FontSize="12" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding TotalCount}" FontSize="28" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,4,0,0" />
+          </StackPanel>
+        </Border>
+
+        <!-- 可用 -->
+        <Border Classes="Card" Padding="12" Margin="4">
+          <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="可用" Foreground="Green" FontSize="12" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding AvailableCount}" FontSize="28" FontWeight="Bold" Foreground="Green" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding AvailablePercent, StringFormat={}{0:F1}%}" Foreground="{DynamicResource SemiGrey5}" FontSize="11" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <!-- 验证中 -->
+        <Border Classes="Card" Padding="12" Margin="4">
+          <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="验证中" Foreground="Orange" FontSize="12" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding ValidatingCount}" FontSize="28" FontWeight="Bold" Foreground="Orange" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding ValidatingPercent, StringFormat={}{0:F1}%}" Foreground="{DynamicResource SemiGrey5}" FontSize="11" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <!-- 冷却中 -->
+        <Border Classes="Card" Padding="12" Margin="4">
+          <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="冷却中" Foreground="DodgerBlue" FontSize="12" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding CooldownCount}" FontSize="28" FontWeight="Bold" Foreground="DodgerBlue" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding CooldownPercent, StringFormat={}{0:F1}%}" Foreground="{DynamicResource SemiGrey5}" FontSize="11" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <!-- 已禁用 -->
+        <Border Classes="Card" Padding="12" Margin="4">
+          <StackPanel HorizontalAlignment="Center">
+            <TextBlock Text="已禁用" Foreground="Gray" FontSize="12" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding DisabledCount}" FontSize="28" FontWeight="Bold" Foreground="Gray" HorizontalAlignment="Center" Margin="0,4,0,0" />
+            <TextBlock Text="{Binding DisabledPercent, StringFormat={}{0:F1}%}" Foreground="{DynamicResource SemiGrey5}" FontSize="11" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </UniformGrid>
+
+      <!-- 额外统计 -->
+      <StackPanel Orientation="Horizontal" Spacing="24" Margin="8,8,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="成功率:" Foreground="{DynamicResource SemiGrey6}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding OverallSuccessRate, StringFormat={}{0:F1}%}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="平均响应:" Foreground="{DynamicResource SemiGrey6}" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding AvgResponseTime, StringFormat={}{0:F0}ms}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

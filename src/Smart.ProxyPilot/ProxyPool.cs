@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Smart.ProxyPilot.Abstractions;
-using Smart.ProxyPilot.Events;
 using Smart.ProxyPilot.Models;
 using Smart.ProxyPilot.Options;
+using Smart.ProxyPilot.EventSinks;
 
 namespace Smart.ProxyPilot;
 
@@ -18,6 +18,7 @@ public class ProxyPool(
     private readonly IProxyValidator _validator = validator;
     private readonly IProxyScheduler _scheduler = scheduler;
     private readonly IProxyStorage _storage = storage;
+    private readonly IProxyEventSink _eventSink = options.EventSink ?? new NullProxyEventSink();
     private readonly Channel<ProxyInfo> _validationChannel = Channel.CreateUnbounded<ProxyInfo>();
     private readonly ConcurrentQueue<TaskCompletionSource<ProxyInfo>> _waiters = new();
     private readonly List<Task> _validationWorkers = [];
@@ -30,10 +31,6 @@ public class ProxyPool(
     private long _totalGetRequests;
     private long _successfulGetRequests;
     private long _waitingGetRequests;
-
-    public event EventHandler<ProxyValidatedEventArgs>? ProxyValidated;
-    public event EventHandler<ProxyStateChangedEventArgs>? ProxyStateChanged;
-    public event EventHandler<PoolStateChangedEventArgs>? PoolStateChanged;
 
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -285,7 +282,7 @@ public class ProxyPool(
             proxy.Statistics.RecordValidation(result);
         }
 
-        ProxyValidated?.Invoke(this, new ProxyValidatedEventArgs(proxy, result));
+            _eventSink.OnProxyValidated(proxy, result);
 
         if (result.IsSuccess)
         {
@@ -429,8 +426,8 @@ public class ProxyPool(
         }
 
         await _storage.UpdateAsync(proxy, ct).ConfigureAwait(false);
-        ProxyStateChanged?.Invoke(this, new ProxyStateChangedEventArgs(proxy, oldState, state));
-        PoolStateChanged?.Invoke(this, new PoolStateChangedEventArgs(GetSnapshot()));
+        _eventSink.OnProxyStateChanged(proxy, oldState, state);
+        _eventSink.OnPoolStateChanged(GetSnapshot());
     }
 
     private bool TryAssignWaiter(ProxyInfo proxy)

@@ -1,0 +1,123 @@
+<UserControl
+    x:Class="Smart.ProxyPilot.UI.Views.ProxyListView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Smart.ProxyPilot.UI.ViewModels"
+    xmlns:converters="using:Smart.ProxyPilot.UI.Converters"
+    x:DataType="vm:ProxyListViewModel">
+
+  <Design.DataContext>
+    <vm:ProxyListViewModel />
+  </Design.DataContext>
+
+  <Grid ColumnDefinitions="*,320" Margin="8">
+    <!-- 左侧：代理列表 -->
+    <Border Classes="Card" Padding="12" Margin="0,0,8,0">
+      <Grid RowDefinitions="Auto,*,Auto">
+        <!-- 搜索和筛选 -->
+        <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,12">
+          <TextBox
+            Text="{Binding SearchText}"
+            Watermark="搜索 IP 或端口..."
+            Width="200" />
+          <ComboBox
+            PlaceholderText="全部状态"
+            Width="120">
+            <ComboBoxItem Content="全部" />
+            <ComboBoxItem Content="可用" Tag="Available" />
+            <ComboBoxItem Content="验证中" Tag="Validating" />
+            <ComboBoxItem Content="冷却中" Tag="Cooldown" />
+            <ComboBoxItem Content="已禁用" Tag="Disabled" />
+          </ComboBox>
+          <Button Command="{Binding RefreshCommand}" Classes="Tertiary" Content="刷新" />
+        </StackPanel>
+
+        <!-- 代理列表 -->
+        <DataGrid
+          Grid.Row="1"
+          ItemsSource="{Binding Proxies}"
+          SelectedItem="{Binding SelectedProxy}"
+          AutoGenerateColumns="False"
+          IsReadOnly="True"
+          GridLinesVisibility="Horizontal"
+          BorderThickness="1"
+          BorderBrush="{DynamicResource SemiGrey2}">
+          <DataGrid.Columns>
+            <DataGridTemplateColumn Header="状态" Width="60">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="vm:ProxyItemViewModel">
+                  <Ellipse
+                    Width="10" Height="10"
+                    Fill="{Binding State, Converter={x:Static converters:ProxyStateToColorConverter.Instance}}"
+                    HorizontalAlignment="Center" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+            <DataGridTextColumn Header="地址" Binding="{Binding Address}" Width="*" />
+            <DataGridTextColumn Header="类型" Binding="{Binding ProxyType}" Width="80" />
+            <DataGridTextColumn Header="延迟" Binding="{Binding ResponseTimeText}" Width="80" />
+            <DataGridTextColumn Header="状态" Binding="{Binding StateText}" Width="80" />
+          </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- 分页 -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,12,0,0">
+          <Button Command="{Binding PrevPageCommand}" Classes="Tertiary" Content="上一页" />
+          <TextBlock VerticalAlignment="Center">
+            <Run Text="第 " /><Run Text="{Binding CurrentPage}" /><Run Text=" / " /><Run Text="{Binding TotalPages}" /><Run Text=" 页" />
+          </TextBlock>
+          <Button Command="{Binding NextPageCommand}" Classes="Tertiary" Content="下一页" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- 右侧：详情面板 -->
+    <Border Grid.Column="1" Classes="Card" Padding="12">
+      <ScrollViewer>
+        <StackPanel Spacing="12">
+          <TextBlock Text="代理详情" FontSize="16" FontWeight="SemiBold" />
+
+          <StackPanel IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="8">
+            <!-- 基本信息 -->
+            <Border Classes="Card" Padding="12">
+              <StackPanel Spacing="6">
+                <TextBlock Text="基本信息" FontWeight="SemiBold" Foreground="{DynamicResource SemiGrey6}" />
+                <Grid ColumnDefinitions="80,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4,0,0">
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="地址:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedProxy.Address}" />
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="类型:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProxy.ProxyType}" />
+                  <TextBlock Grid.Row="2" Grid.Column="0" Text="状态:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedProxy.StateText}" Foreground="{Binding SelectedProxy.State, Converter={x:Static converters:ProxyStateToColorConverter.Instance}}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <!-- 统计信息 -->
+            <Border Classes="Card" Padding="12">
+              <StackPanel Spacing="6">
+                <TextBlock Text="统计信息" FontWeight="SemiBold" Foreground="{DynamicResource SemiGrey6}" />
+                <Grid ColumnDefinitions="100,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4,0,0">
+                  <TextBlock Grid.Row="0" Grid.Column="0" Text="平均响应:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedProxy.ResponseTimeText}" />
+                  <TextBlock Grid.Row="1" Grid.Column="0" Text="验证成功:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProxy.Proxy.Statistics.ValidationSuccessCount}" />
+                  <TextBlock Grid.Row="2" Grid.Column="0" Text="使用成功:" Foreground="{DynamicResource SemiGrey5}" />
+                  <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedProxy.Proxy.Statistics.UseSuccessCount}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <!-- 未选中提示 -->
+          <TextBlock
+            IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNull}}"
+            Text="请选择一个代理查看详情"
+            Foreground="{DynamicResource SemiGrey5}"
+            HorizontalAlignment="Center"
+            Margin="0,40,0,0" />
+        </StackPanel>
+      </ScrollViewer>
+    </Border>
+  </Grid>
+</UserControl>

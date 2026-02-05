@@ -1,0 +1,456 @@
+using System.Collections.Concurrent;
+using System.Threading.Channels;
+using Smart.ProxyPilot.Abstractions;
+using Smart.ProxyPilot.Events;
+using Smart.ProxyPilot.Models;
+using Smart.ProxyPilot.Options;
+
+namespace Smart.ProxyPilot;
+
+public class ProxyPool(
+    ProxyPoolOptions options,
+    IEnumerable<IProxyProvider> providers,
+    IProxyValidator validator,
+    IProxyScheduler scheduler,
+    IProxyStorage storage) : IProxyPool
+{
+    private readonly IReadOnlyList<IProxyProvider> _providers = providers.ToList();
+    private readonly IProxyValidator _validator = validator;
+    private readonly IProxyScheduler _scheduler = scheduler;
+    private readonly IProxyStorage _storage = storage;
+    private readonly Channel<ProxyInfo> _validationChannel = Channel.CreateUnbounded<ProxyInfo>();
+    private readonly ConcurrentQueue<TaskCompletionSource<ProxyInfo>> _waiters = new();
+    private readonly List<Task> _validationWorkers = [];
+    private readonly List<CancellationTokenSource> _validationWorkerCts = [];
+    private int _validationConcurrency = Math.Max(1, options.ValidationConcurrency);
+
+    private readonly List<Task> _backgroundTasks = [];
+    private CancellationTokenSource? _cts;
+    private bool _started;
+    private long _totalGetRequests;
+    private long _successfulGetRequests;
+    private long _waitingGetRequests;
+
+    public event EventHandler<ProxyValidatedEventArgs>? ProxyValidated;
+    public event EventHandler<ProxyStateChangedEventArgs>? ProxyStateChanged;
+    public event EventHandler<PoolStateChangedEventArgs>? PoolStateChanged;
+
+    public async Task StartAsync(CancellationToken ct = default)
+    {
+        if (_started)
+        {
+            return;
+        }
+
+        if (_providers.Count == 0)
+        {
+            throw new InvalidOperationException("At least one provider is required.");
+        }
+
+        _started = true;
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        _validationConcurrency = Math.Max(1, options.ValidationConcurrency);
+
+        _backgroundTasks.Add(Task.Run(() => FetchLoopAsync(_cts.Token), _cts.Token));
+        EnsureValidationWorkers(_validationConcurrency);
+        _backgroundTasks.Add(Task.Run(() => RevalidateLoopAsync(_cts.Token), _cts.Token));
+        _backgroundTasks.Add(Task.Run(() => CooldownLoopAsync(_cts.Token), _cts.Token));
+
+        await FetchOnceAsync(_cts.Token).ConfigureAwait(false);
+    }
+
+    public async Task StopAsync(CancellationToken ct = default)
+    {
+        if (!_started || _cts is null)
+        {
+            return;
+        }
+
+        _cts.Cancel();
+        CancelValidationWorkers();
+        var allTasks = _backgroundTasks.Concat(_validationWorkers).ToList();
+        try
+        {
+            await Task.WhenAll(allTasks).WaitAsync(ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        _backgroundTasks.Clear();
+        _validationWorkers.Clear();
+        _validationWorkerCts.Clear();
+        _cts.Dispose();
+        _cts = null;
+        _started = false;
+    }
+
+    public async ValueTask<ProxyInfo?> TryGetProxyAsync(CancellationToken ct = default)
+    {
+        Interlocked.Increment(ref _totalGetRequests);
+        var available = await _storage.GetByStateAsync(ProxyState.Available, ct).ConfigureAwait(false);
+        var selected = _scheduler.Select(available);
+        if (selected is null)
+        {
+            return null;
+        }
+
+        if (options.RemoveAfterGet)
+        {
+            await _storage.RemoveAsync(selected.Id, ct).ConfigureAwait(false);
+            Interlocked.Increment(ref _successfulGetRequests);
+            return selected;
+        }
+
+        await SetStateAsync(selected, ProxyState.InUse, ct).ConfigureAwait(false);
+        Interlocked.Increment(ref _successfulGetRequests);
+        return selected;
+    }
+
+    public async ValueTask<ProxyInfo> GetProxyAsync(TimeSpan? timeout = null, CancellationToken ct = default)
+    {
+        var selected = await TryGetProxyAsync(ct).ConfigureAwait(false);
+        if (selected is not null)
+        {
+            return selected;
+        }
+
+        var waitTimeout = timeout ?? options.DefaultGetTimeout;
+        if (waitTimeout == TimeSpan.Zero)
+        {
+            throw new TimeoutException("Timeout waiting for proxy.");
+        }
+
+        var tcs = new TaskCompletionSource<ProxyInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _waiters.Enqueue(tcs);
+        Interlocked.Increment(ref _waitingGetRequests);
+
+        using var timeoutCts = waitTimeout == Timeout.InfiniteTimeSpan
+            ? null
+            : new CancellationTokenSource(waitTimeout);
+        using var timeoutReg = timeoutCts?.Token.Register(() => tcs.TrySetException(new TimeoutException("Timeout waiting for proxy.")));
+        using var cancelReg = ct.Register(() => tcs.TrySetCanceled(ct));
+
+        try
+        {
+            var proxy = await tcs.Task.ConfigureAwait(false);
+            return proxy;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _waitingGetRequests);
+        }
+    }
+
+    public async ValueTask<ProxyInfo?> TryGetProxyOrDefaultAsync(TimeSpan? timeout = null, CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetProxyAsync(timeout, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // Convert timeout to a null result for convenience.
+            return null;
+        }
+    }
+
+    public void ReportSuccess(ProxyInfo proxy, TimeSpan? responseTime = null)
+    {
+        _scheduler.OnProxyUsed(proxy, true, responseTime);
+        lock (proxy)
+        {
+            proxy.Statistics.RecordUse(true, responseTime, ValidationResultType.Success);
+        }
+
+        if (options.RemoveAfterGet)
+        {
+            _storage.RemoveAsync(proxy.Id).GetAwaiter().GetResult();
+            return;
+        }
+
+        SetStateAsync(proxy, ProxyState.Available).GetAwaiter().GetResult();
+        if (TryAssignWaiter(proxy))
+        {
+            SetStateAsync(proxy, ProxyState.InUse).GetAwaiter().GetResult();
+            Interlocked.Increment(ref _successfulGetRequests);
+        }
+    }
+
+    public void ReportFailure(ProxyInfo proxy, string? reason = null)
+    {
+        _scheduler.OnProxyUsed(proxy, false, null);
+        lock (proxy)
+        {
+            proxy.Statistics.RecordUse(false, null, ValidationResultType.Exception);
+        }
+
+        if (options.RemoveAfterGet)
+        {
+            _storage.RemoveAsync(proxy.Id).GetAwaiter().GetResult();
+            return;
+        }
+
+        var nextState = proxy.Statistics.ConsecutiveFailCount >= options.MaxConsecutiveFailCount
+            ? ProxyState.Disabled
+            : ProxyState.Cooldown;
+        SetStateAsync(proxy, nextState).GetAwaiter().GetResult();
+    }
+
+    public ProxyPoolSnapshot GetSnapshot()
+    {
+        var snapshot = _storage.GetSnapshotAsync().GetAwaiter().GetResult();
+        snapshot.TotalGetRequests = Interlocked.Read(ref _totalGetRequests);
+        snapshot.SuccessfulGetRequests = Interlocked.Read(ref _successfulGetRequests);
+        snapshot.WaitingGetRequests = Interlocked.Read(ref _waitingGetRequests);
+        snapshot.Timestamp = DateTime.UtcNow;
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Current validation worker concurrency.
+    /// </summary>
+    public int CurrentValidationConcurrency => Volatile.Read(ref _validationConcurrency);
+
+    /// <summary>
+    /// Update validation worker count at runtime.
+    /// </summary>
+    public void UpdateValidationConcurrency(int newConcurrency)
+    {
+        if (newConcurrency < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(newConcurrency), "Concurrency must be at least 1.");
+        }
+
+        EnsureValidationWorkers(newConcurrency);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync().ConfigureAwait(false);
+    }
+
+    private async Task FetchLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            await FetchOnceAsync(ct).ConfigureAwait(false);
+            await Task.Delay(options.FetchInterval, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task FetchOnceAsync(CancellationToken ct)
+    {
+        var snapshot = await _storage.GetSnapshotAsync(ct).ConfigureAwait(false);
+        if (snapshot.TotalCount >= options.MaxPoolSize)
+        {
+            return;
+        }
+
+        var need = Math.Min(options.FetchBatchSize, options.MaxPoolSize - snapshot.TotalCount);
+        if (need <= 0)
+        {
+            return;
+        }
+
+        foreach (var provider in _providers)
+        {
+            var fetched = await provider.FetchAsync(need, ct).ConfigureAwait(false);
+            foreach (var proxy in fetched)
+            {
+                if (await _storage.GetByIdAsync(proxy.Id, ct).ConfigureAwait(false) is not null)
+                {
+                    continue;
+                }
+
+                proxy.State = ProxyState.Pending;
+                await _storage.AddAsync(proxy, ct).ConfigureAwait(false);
+                await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task ValidateProxyAsync(ProxyInfo proxy, CancellationToken ct)
+    {
+        if (IsExpired(proxy))
+        {
+            await SetStateAsync(proxy, ProxyState.Expired, ct).ConfigureAwait(false);
+            await _storage.RemoveAsync(proxy.Id, ct).ConfigureAwait(false);
+            return;
+        }
+
+        await SetStateAsync(proxy, ProxyState.Validating, ct).ConfigureAwait(false);
+        var result = await _validator.ValidateAsync(proxy, ct).ConfigureAwait(false);
+        lock (proxy)
+        {
+            proxy.Statistics.RecordValidation(result);
+        }
+
+        ProxyValidated?.Invoke(this, new ProxyValidatedEventArgs(proxy, result));
+
+        if (result.IsSuccess)
+        {
+            await SetStateAsync(proxy, ProxyState.Available, ct).ConfigureAwait(false);
+            if (TryAssignWaiter(proxy))
+            {
+                await SetStateAsync(proxy, ProxyState.InUse, ct).ConfigureAwait(false);
+                Interlocked.Increment(ref _successfulGetRequests);
+            }
+        }
+        else
+        {
+            var nextState = proxy.Statistics.ConsecutiveFailCount >= options.MaxConsecutiveFailCount
+                ? ProxyState.Disabled
+                : ProxyState.Cooldown;
+            await SetStateAsync(proxy, nextState, ct).ConfigureAwait(false);
+        }
+    }
+
+    private void EnsureValidationWorkers(int desired)
+    {
+        lock (_validationWorkers)
+        {
+            var current = _validationWorkers.Count;
+            if (desired == current)
+            {
+                Volatile.Write(ref _validationConcurrency, desired);
+                return;
+            }
+
+            if (desired > current)
+            {
+                var toAdd = desired - current;
+                for (var i = 0; i < toAdd; i++)
+                {
+                    var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts?.Token ?? CancellationToken.None);
+                    _validationWorkerCts.Add(cts);
+                    _validationWorkers.Add(Task.Run(() => ValidationWorkerAsync(cts.Token), cts.Token));
+                }
+            }
+            else
+            {
+                var toRemove = current - desired;
+                for (var i = 0; i < toRemove; i++)
+                {
+                    var index = _validationWorkerCts.Count - 1;
+                    _validationWorkerCts[index].Cancel();
+                    _validationWorkerCts.RemoveAt(index);
+                    _validationWorkers.RemoveAt(index);
+                }
+            }
+
+            Volatile.Write(ref _validationConcurrency, desired);
+        }
+    }
+
+    private void CancelValidationWorkers()
+    {
+        lock (_validationWorkers)
+        {
+            foreach (var cts in _validationWorkerCts)
+            {
+                cts.Cancel();
+                cts.Dispose();
+            }
+
+            _validationWorkerCts.Clear();
+        }
+    }
+
+    private async Task ValidationWorkerAsync(CancellationToken ct)
+    {
+        var reader = _validationChannel.Reader;
+        while (!ct.IsCancellationRequested && await reader.WaitToReadAsync(ct).ConfigureAwait(false))
+        {
+            while (reader.TryRead(out var proxy))
+            {
+                await ValidateProxyAsync(proxy, ct).ConfigureAwait(false);
+                if (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    private async Task RevalidateLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var available = await _storage.GetByStateAsync(ProxyState.Available, ct).ConfigureAwait(false);
+            foreach (var proxy in available)
+            {
+                if (proxy.Statistics.LastValidatedAt is null ||
+                    DateTime.UtcNow - proxy.Statistics.LastValidatedAt.Value >= options.ValidationInterval)
+                {
+                    await SetStateAsync(proxy, ProxyState.Pending, ct).ConfigureAwait(false);
+                    await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
+                }
+            }
+
+            await Task.Delay(options.ValidationInterval, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task CooldownLoopAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            var cooldown = await _storage.GetByStateAsync(ProxyState.Cooldown, ct).ConfigureAwait(false);
+            foreach (var proxy in cooldown)
+            {
+                if (proxy.Statistics.LastFailAt is null)
+                {
+                    continue;
+                }
+
+                if (DateTime.UtcNow - proxy.Statistics.LastFailAt.Value >= options.CooldownDuration)
+                {
+                    await SetStateAsync(proxy, ProxyState.Pending, ct).ConfigureAwait(false);
+                    await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
+                }
+            }
+
+            await Task.Delay(options.CooldownDuration, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task SetStateAsync(ProxyInfo proxy, ProxyState state, CancellationToken ct = default)
+    {
+        ProxyState oldState;
+        lock (proxy)
+        {
+            oldState = proxy.State;
+            if (oldState == state)
+            {
+                return;
+            }
+
+            proxy.State = state;
+        }
+
+        await _storage.UpdateAsync(proxy, ct).ConfigureAwait(false);
+        ProxyStateChanged?.Invoke(this, new ProxyStateChangedEventArgs(proxy, oldState, state));
+        PoolStateChanged?.Invoke(this, new PoolStateChangedEventArgs(GetSnapshot()));
+    }
+
+    private bool TryAssignWaiter(ProxyInfo proxy)
+    {
+        while (_waiters.TryDequeue(out var waiter))
+        {
+            if (waiter.Task.IsCompleted)
+            {
+                continue;
+            }
+
+            if (waiter.TrySetResult(proxy))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool IsExpired(ProxyInfo proxy)
+        => DateTime.UtcNow - proxy.Statistics.CreatedAt >= options.ProxyExpireTime;
+}

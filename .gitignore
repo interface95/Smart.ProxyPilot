@@ -1,0 +1,15 @@
+# .NET
+bin/
+obj/
+
+# User-specific
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+
+# Test results
+TestResults/

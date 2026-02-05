@@ -1,0 +1,83 @@
+<UserControl
+    x:Class="Smart.ProxyPilot.UI.Views.ProxyDetailView"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Smart.ProxyPilot.UI.ViewModels"
+    xmlns:converters="using:Smart.ProxyPilot.UI.Converters"
+    x:DataType="vm:ProxyListViewModel">
+
+  <Border Classes="Card" Padding="16" Margin="0,8,8,8" Background="{DynamicResource SemiGrey0}">
+    <ScrollViewer>
+      <StackPanel Spacing="16">
+        <TextBlock Text="代理详情" FontSize="15" FontWeight="SemiBold" />
+
+        <!-- 已选中时显示 -->
+        <StackPanel IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNotNull}}" Spacing="16">
+
+          <!-- 基本信息 -->
+          <StackPanel Spacing="8">
+            <TextBlock Text="基本信息" FontSize="12" Foreground="{DynamicResource SemiGrey5}" />
+            <Grid ColumnDefinitions="70,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4,0,0">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="地址" Foreground="{DynamicResource SemiGrey5}" FontSize="13" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedProxy.Address}" FontSize="13" FontWeight="SemiBold" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="类型" Foreground="{DynamicResource SemiGrey5}" FontSize="13" Margin="0,6,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProxy.ProxyType}" FontSize="13" Margin="0,6,0,0" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="状态" Foreground="{DynamicResource SemiGrey5}" FontSize="13" Margin="0,6,0,0" />
+              <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="0,6,0,0">
+                <Ellipse Width="8" Height="8" Fill="{Binding SelectedProxy.State, Converter={x:Static converters:ProxyStateToColorConverter.Instance}}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding SelectedProxy.StateText}" FontSize="13" Foreground="{Binding SelectedProxy.State, Converter={x:Static converters:ProxyStateToColorConverter.Instance}}" />
+              </StackPanel>
+
+              <TextBlock Grid.Row="3" Grid.Column="0" Text="延迟" Foreground="{DynamicResource SemiGrey5}" FontSize="13" Margin="0,6,0,0" />
+              <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedProxy.ResponseTimeText}" FontSize="13" Margin="0,6,0,0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="{DynamicResource SemiGrey2}" />
+
+          <!-- 统计信息 -->
+          <StackPanel Spacing="8">
+            <TextBlock Text="统计信息" FontSize="12" Foreground="{DynamicResource SemiGrey5}" />
+            <Grid ColumnDefinitions="70,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4,0,0">
+              <TextBlock Grid.Row="0" Grid.Column="0" Text="验证成功" Foreground="{DynamicResource SemiGrey5}" FontSize="13" />
+              <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedProxy.Proxy.Statistics.ValidationSuccessCount}" FontSize="13" />
+
+              <TextBlock Grid.Row="1" Grid.Column="0" Text="验证失败" Foreground="{DynamicResource SemiGrey5}" FontSize="13" Margin="0,6,0,0" />
+              <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedProxy.Proxy.Statistics.ValidationFailureCount}" FontSize="13" Margin="0,6,0,0" />
+
+              <TextBlock Grid.Row="2" Grid.Column="0" Text="使用成功" Foreground="{DynamicResource SemiGrey5}" FontSize="13" Margin="0,6,0,0" />
+              <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedProxy.Proxy.Statistics.UseSuccessCount}" FontSize="13" Margin="0,6,0,0" />
+            </Grid>
+          </StackPanel>
+
+          <Border Height="1" Background="{DynamicResource SemiGrey2}" />
+
+          <!-- 操作按钮 -->
+          <StackPanel Spacing="8">
+            <Button Classes="Tertiary" Content="立即验证" HorizontalAlignment="Stretch" />
+            <Button Classes="Warning" Content="禁用代理" HorizontalAlignment="Stretch" />
+          </StackPanel>
+        </StackPanel>
+
+        <!-- 未选中提示 -->
+        <StackPanel
+          IsVisible="{Binding SelectedProxy, Converter={x:Static ObjectConverters.IsNull}}"
+          VerticalAlignment="Center"
+          HorizontalAlignment="Center"
+          Margin="0,60,0,0">
+          <PathIcon
+            Data="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+            Width="32" Height="32"
+            Foreground="{DynamicResource SemiGrey3}" />
+          <TextBlock
+            Text="选择代理查看详情"
+            Foreground="{DynamicResource SemiGrey4}"
+            HorizontalAlignment="Center"
+            Margin="0,12,0,0" />
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Border>
+</UserControl>

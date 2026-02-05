@@ -5,7 +5,6 @@
     xmlns:u="https://irihi.tech/ursa"
     xmlns:vm="using:Smart.ProxyPilot.UI.ViewModels"
     xmlns:views="using:Smart.ProxyPilot.UI.Views"
-    xmlns:converters="using:Smart.ProxyPilot.UI.Converters"
     x:DataType="vm:MainViewModel"
     Title="Smart.ProxyPilot - 智能代理池"
     Width="1200" Height="800"
@@ -16,52 +15,29 @@
     <vm:MainViewModel />
   </Design.DataContext>
 
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <!-- 工具栏 -->
-    <Border Grid.Row="0" Padding="12,8" Background="{DynamicResource SemiGrey1}">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button
-          Command="{Binding StartCommand}"
-          IsEnabled="{Binding IsRunning, Converter={x:Static converters:InverseBoolConverter.Instance}}"
-          Classes="Primary">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="M8 5v14l11-7z" Width="14" Height="14" />
-            <TextBlock Text="启动" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
-        <Button
-          Command="{Binding StopCommand}"
-          IsEnabled="{Binding IsRunning}"
-          Classes="Danger">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="M6 6h12v12H6z" Width="14" Height="14" />
-            <TextBlock Text="停止" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
-        <Button Command="{Binding RefreshCommand}" Classes="Tertiary">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" Width="14" Height="14" />
-            <TextBlock Text="刷新" VerticalAlignment="Center" />
-          </StackPanel>
-        </Button>
+  <Grid RowDefinitions="Auto,*" Margin="0,32,0,0">
+    <!-- 顶部状态条 -->
+    <views:PoolStatusView Grid.Row="0" DataContext="{Binding PoolStatus}" />
 
-        <Border Width="1" Background="{DynamicResource SemiGrey3}" Margin="8,4" />
+    <!-- 主内容区：左侧边栏 + 右侧内容 -->
+    <Grid Grid.Row="1" ColumnDefinitions="56,*">
+      <!-- 左侧边栏 -->
+      <views:SidebarView Grid.Column="0" DataContext="{Binding}" />
 
-        <!-- 运行状态指示 -->
-        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <Ellipse Width="8" Height="8" Fill="{Binding IsRunning, Converter={x:Static converters:BoolToColorConverter.Instance}}" />
-          <TextBlock Text="{Binding IsRunning, Converter={x:Static converters:BoolToTextConverter.Instance}}" Foreground="{DynamicResource SemiGrey6}" />
-        </StackPanel>
-      </StackPanel>
-    </Border>
+      <!-- 右侧主内容 -->
+      <Grid Grid.Column="1" RowDefinitions="*,Auto">
+        <!-- 上部：代理列表 + 详情 -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,320">
+          <!-- 代理列表 -->
+          <views:ProxyListView Grid.Column="0" DataContext="{Binding ProxyList}" />
 
-    <!-- 状态概览 -->
-    <views:PoolStatusView Grid.Row="1" DataContext="{Binding PoolStatus}" />
+          <!-- 详情面板 -->
+          <views:ProxyDetailView Grid.Column="1" DataContext="{Binding ProxyList}" />
+        </Grid>
 
-    <!-- 代理列表 -->
-    <views:ProxyListView Grid.Row="2" DataContext="{Binding ProxyList}" />
-
-    <!-- 日志视图 -->
-    <views:LogView Grid.Row="3" DataContext="{Binding}" />
+        <!-- 下部：日志 -->
+        <views:LogView Grid.Row="1" DataContext="{Binding}" />
+      </Grid>
+    </Grid>
   </Grid>
 </u:UrsaWindow>

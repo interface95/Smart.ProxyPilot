@@ -11,14 +11,16 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.7" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="11.3.7" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.7" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.7" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.7" />
     <PackageReference Include="Avalonia.Diagnostics" Version="11.3.7" Condition="'$(Configuration)' == 'Debug'" />
-    <PackageReference Include="Semi.Avalonia" Version="11.2.1.2" />
+    <PackageReference Include="Semi.Avalonia" Version="11.3.7" />
     <PackageReference Include="Irihi.Ursa" Version="1.14.1" />
     <PackageReference Include="Irihi.Ursa.Themes.Semi" Version="1.14.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageReference Include="Semi.Avalonia.DataGrid" Version="11.3.7" />
   </ItemGroup>
 
   <ItemGroup>

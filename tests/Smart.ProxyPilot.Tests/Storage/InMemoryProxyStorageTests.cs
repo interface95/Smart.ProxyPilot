@@ -9,6 +9,7 @@ public class InMemoryProxyStorageTests
     [Fact]
     public async Task Crud_ShouldWork()
     {
+        // Tests basic CRUD and state filtering.
         var storage = new InMemoryProxyStorage();
         var proxy = new ProxyInfo("1.1.1.1", 8080, ProxyType.Http);
 
@@ -29,6 +30,7 @@ public class InMemoryProxyStorageTests
     [Fact]
     public async Task GetSnapshot_ShouldAggregate()
     {
+        // Tests snapshot aggregation.
         var storage = new InMemoryProxyStorage();
         var proxy = new ProxyInfo("1.1.1.1", 8080, ProxyType.Http);
         proxy.Statistics.RecordValidation(ValidationResult.Success(TimeSpan.FromMilliseconds(10), 200));

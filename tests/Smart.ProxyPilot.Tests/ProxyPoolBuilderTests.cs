@@ -12,6 +12,7 @@ public class ProxyPoolBuilderTests
     [Fact]
     public void AddApiProvider_ShouldBuildPool()
     {
+        // Tests builder with API provider creates a pool.
         var builder = new ProxyPoolBuilder()
             .Configure(options => options.ValidationUrl = "https://httpbin.org/ip")
             .AddApiProvider(new Uri("http://example.com/api?qty=5"));

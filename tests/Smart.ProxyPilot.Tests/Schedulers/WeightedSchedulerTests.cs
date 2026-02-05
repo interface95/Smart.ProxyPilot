@@ -9,6 +9,7 @@ public class WeightedSchedulerTests
     [Fact]
     public void Select_ShouldPreferHigherWeightProxy()
     {
+        // Tests weighted selection favors higher weight.
         var scheduler = new WeightedScheduler();
         var fast = new ProxyInfo("1.1.1.1", 8080, ProxyType.Http);
         fast.Statistics.RecordValidation(ValidationResult.Success(TimeSpan.FromMilliseconds(50), 200));

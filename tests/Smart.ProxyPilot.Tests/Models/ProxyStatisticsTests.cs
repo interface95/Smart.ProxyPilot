@@ -8,6 +8,7 @@ public class ProxyStatisticsTests
     [Fact]
     public void RecordValidation_ShouldUpdateCounts()
     {
+        // Tests validation counters update.
         var stats = new ProxyStatistics();
         stats.RecordValidation(ValidationResult.Success(TimeSpan.FromMilliseconds(10), 200));
         stats.RecordValidation(ValidationResult.Timeout(TimeSpan.FromMilliseconds(5)));
@@ -21,6 +22,7 @@ public class ProxyStatisticsTests
     [Fact]
     public void RecordUse_ShouldUpdateCounts()
     {
+        // Tests usage counters update.
         var stats = new ProxyStatistics();
         stats.RecordUse(true, TimeSpan.FromMilliseconds(15), ValidationResultType.Success);
         stats.RecordUse(false, null, ValidationResultType.Timeout);

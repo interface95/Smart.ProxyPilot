@@ -10,6 +10,7 @@ public class CompositeProxyValidatorTests
     [Fact]
     public async Task ValidateAsync_ShouldReturnFailureIfAnyValidatorFails()
     {
+        // Tests composite failure propagation.
         var proxy = new ProxyInfo("1.1.1.1", 8080, ProxyType.Http);
         var validator1 = new MockProxyValidator
         {

@@ -13,6 +13,7 @@ public class ProxyPoolTests
     [Fact]
     public async Task GetProxyAsync_ShouldWaitWhenPoolEmpty()
     {
+        // Tests waiting for a proxy when pool is empty.
         var provider = new MockProxyProvider();
         var validator = new MockProxyValidator();
         var options = new ProxyPoolOptions
@@ -40,6 +41,7 @@ public class ProxyPoolTests
     [Fact]
     public async Task GetProxyAsync_ShouldThrowOnTimeout()
     {
+        // Tests timeout throws exception.
         var provider = new MockProxyProvider();
         var validator = new MockProxyValidator();
         var options = new ProxyPoolOptions
@@ -86,6 +88,7 @@ public class ProxyPoolTests
     [Fact]
     public async Task UpdateValidationConcurrency_ShouldAdjustWorkers()
     {
+        // Tests dynamic validation worker count update.
         var provider = new MockProxyProvider();
         var validator = new MockProxyValidator();
         var options = new ProxyPoolOptions

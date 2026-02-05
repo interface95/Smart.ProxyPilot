@@ -9,6 +9,7 @@ public class RoundRobinSchedulerTests
     [Fact]
     public void Select_ShouldCycleProxies()
     {
+        // Tests round-robin ordering.
         var scheduler = new RoundRobinScheduler();
         var proxies = new List<ProxyInfo>
         {

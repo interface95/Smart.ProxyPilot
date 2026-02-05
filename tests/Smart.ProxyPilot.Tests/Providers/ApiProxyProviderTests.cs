@@ -11,6 +11,7 @@ public class ApiProxyProviderTests
     [Fact]
     public async Task FetchAsync_ShouldParseLinesByDefault()
     {
+        // Tests default line parser for API content.
         var handler = new StubMessageHandler("1.1.1.1:8080\n2.2.2.2:9090\n");
         var client = new HttpClient(handler);
         var options = new ApiProxyProviderOptions(new Uri("http://example.com")) { Client = client };
@@ -26,6 +27,7 @@ public class ApiProxyProviderTests
     [Fact]
     public async Task FetchAsync_ShouldUseUrlAsIs()
     {
+        // Tests API URL is not modified.
         var handler = new StubMessageHandler("1.1.1.1:8080");
         var client = new HttpClient(handler);
         var url = new Uri("http://example.com/api?qty=5");
@@ -40,6 +42,7 @@ public class ApiProxyProviderTests
     [Fact]
     public async Task FetchAsync_ShouldWorkWithRealApi()
     {
+        // Tests real API returns at least one proxy.
         var url = new Uri("http://bapi.51daili.com/getapi2?linePoolIndex=-1&packid=2&time=1&qty=5&port=1&format=txt&usertype=17&uid=38584");
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         var options = new ApiProxyProviderOptions(url) { Client = client };

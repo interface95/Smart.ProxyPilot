@@ -10,6 +10,7 @@ public class HttpProxyValidatorTests
     [Fact]
     public async Task ValidateAsync_ShouldReturnFailureForInvalidProxy()
     {
+        // Tests invalid proxy returns failure.
         var options = new HttpProxyValidatorOptions(new Uri("https://example.com"))
         {
             Timeout = TimeSpan.FromMilliseconds(200)

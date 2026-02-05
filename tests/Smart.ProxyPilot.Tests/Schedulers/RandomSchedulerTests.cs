@@ -9,6 +9,7 @@ public class RandomSchedulerTests
     [Fact]
     public void Select_ShouldReturnFromList()
     {
+        // Tests random selection is within input list.
         var scheduler = new RandomScheduler();
         var proxies = new List<ProxyInfo>
         {

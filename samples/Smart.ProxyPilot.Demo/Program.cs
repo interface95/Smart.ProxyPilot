@@ -23,7 +23,7 @@ var pool = new ProxyPoolBuilder()
 
 await pool.StartAsync();
 
-var snapshot = pool.GetSnapshot();
+var snapshot = pool.CurrentState;
 Console.WriteLine($"可用: {snapshot.AvailableCount}, 验证中: {snapshot.ValidatingCount}");
 
 var proxy = await pool.TryGetProxyAsync();
@@ -60,8 +60,8 @@ sealed class ConsoleEventSink : IProxyEventSink
         Console.WriteLine($"[状态] {proxy} - {oldState} -> {newState}");
     }
 
-    public void OnPoolStateChanged(ProxyPoolSnapshot snapshot)
+    public void OnPoolStateChanged(IProxyPoolState state)
     {
-        Console.WriteLine($"[池] 可用: {snapshot.AvailableCount}, 验证中: {snapshot.ValidatingCount}");
+        Console.WriteLine($"[池] 可用: {state.AvailableCount}, 验证中: {state.ValidatingCount}");
     }
 }

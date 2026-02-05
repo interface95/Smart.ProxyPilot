@@ -1,77 +1,77 @@
 namespace Smart.ProxyPilot.Models;
 
-public class ProxyPoolSnapshot()
+public interface IProxyPoolState
 {
     /// <summary>
-    /// 快照时间。
+    /// 状态更新时间。
     /// </summary>
-    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    DateTime Timestamp { get; }
 
     /// <summary>
-    /// 总数。
+    /// 总数量。
     /// </summary>
-    public int TotalCount { get; set; }
+    int TotalCount { get; }
     /// <summary>
-    /// 待验证数。
+    /// 待验证数量。
     /// </summary>
-    public int PendingCount { get; set; }
+    int PendingCount { get; }
     /// <summary>
     /// 验证中数量。
     /// </summary>
-    public int ValidatingCount { get; set; }
+    int ValidatingCount { get; }
     /// <summary>
     /// 可用数量。
     /// </summary>
-    public int AvailableCount { get; set; }
+    int AvailableCount { get; }
     /// <summary>
     /// 使用中数量。
     /// </summary>
-    public int InUseCount { get; set; }
+    int InUseCount { get; }
     /// <summary>
     /// 冷却中数量。
     /// </summary>
-    public int CooldownCount { get; set; }
+    int CooldownCount { get; }
     /// <summary>
     /// 禁用数量。
     /// </summary>
-    public int DisabledCount { get; set; }
+    int DisabledCount { get; }
 
     /// <summary>
     /// 验证总次数。
     /// </summary>
-    public long TotalValidations { get; set; }
+    long TotalValidations { get; }
     /// <summary>
     /// 验证成功次数。
     /// </summary>
-    public long SuccessfulValidations { get; set; }
+    long SuccessfulValidations { get; }
     /// <summary>
     /// 验证失败次数。
     /// </summary>
-    public long FailedValidations { get; set; }
+    long FailedValidations { get; }
 
     /// <summary>
     /// 获取请求总数。
     /// </summary>
-    public long TotalGetRequests { get; set; }
+    long TotalGetRequests { get; }
     /// <summary>
     /// 获取成功总数。
     /// </summary>
-    public long SuccessfulGetRequests { get; set; }
+    long SuccessfulGetRequests { get; }
     /// <summary>
     /// 等待获取总数。
     /// </summary>
-    public long WaitingGetRequests { get; set; }
+    long WaitingGetRequests { get; }
 
     /// <summary>
     /// 平均验证耗时。
     /// </summary>
-    public double AvgValidationTime { get; set; }
+    double AvgValidationTime { get; }
     /// <summary>
     /// 平均响应时间。
     /// </summary>
-    public double AvgResponseTime { get; set; }
+    double AvgResponseTime { get; }
     /// <summary>
     /// 总体成功率。
     /// </summary>
-    public double OverallSuccessRate { get; set; }
+    double OverallSuccessRate { get; }
 }

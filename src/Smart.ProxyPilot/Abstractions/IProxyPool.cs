@@ -65,9 +65,8 @@ public interface IProxyPool : IAsyncDisposable
     void ReportFailure(ProxyInfo proxy, string? reason = null);
 
     /// <summary>
-    /// 获取池快照。
+    /// 获取当前状态对象（引用不变）。
     /// </summary>
-    /// <returns>快照。</returns>
-    ProxyPoolSnapshot GetSnapshot();
+    IProxyPoolState CurrentState { get; }
 
 }

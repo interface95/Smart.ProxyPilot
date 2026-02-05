@@ -19,6 +19,7 @@ public class ProxyPool(
     private readonly IProxyScheduler _scheduler = scheduler;
     private readonly IProxyStorage _storage = storage;
     private readonly IProxyEventSink _eventSink = options.EventSink ?? new NullProxyEventSink();
+    private readonly ProxyPoolState _state = new();
     private readonly Channel<ProxyInfo> _validationChannel = Channel.CreateUnbounded<ProxyInfo>();
     private readonly ConcurrentQueue<TaskCompletionSource<ProxyInfo>> _waiters = new();
     private readonly List<Task> _validationWorkers = [];
@@ -28,9 +29,7 @@ public class ProxyPool(
     private readonly List<Task> _backgroundTasks = [];
     private CancellationTokenSource? _cts;
     private bool _started;
-    private long _totalGetRequests;
-    private long _successfulGetRequests;
-    private long _waitingGetRequests;
+    private readonly object _stateLock = new();
 
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -83,7 +82,7 @@ public class ProxyPool(
 
     public async ValueTask<ProxyInfo?> TryGetProxyAsync(CancellationToken ct = default)
     {
-        Interlocked.Increment(ref _totalGetRequests);
+        RecordGetRequest();
         var available = await _storage.GetByStateAsync(ProxyState.Available, ct).ConfigureAwait(false);
         var selected = _scheduler.Select(available);
         if (selected is null)
@@ -94,12 +93,13 @@ public class ProxyPool(
         if (options.RemoveAfterGet)
         {
             await _storage.RemoveAsync(selected.Id, ct).ConfigureAwait(false);
-            Interlocked.Increment(ref _successfulGetRequests);
+            RecordGetSuccess();
+            RemoveState(selected.State);
             return selected;
         }
 
         await SetStateAsync(selected, ProxyState.InUse, ct).ConfigureAwait(false);
-        Interlocked.Increment(ref _successfulGetRequests);
+        RecordGetSuccess();
         return selected;
     }
 
@@ -119,7 +119,7 @@ public class ProxyPool(
 
         var tcs = new TaskCompletionSource<ProxyInfo>(TaskCreationOptions.RunContinuationsAsynchronously);
         _waiters.Enqueue(tcs);
-        Interlocked.Increment(ref _waitingGetRequests);
+        IncrementWaiting();
 
         using var timeoutCts = waitTimeout == Timeout.InfiniteTimeSpan
             ? null
@@ -134,7 +134,7 @@ public class ProxyPool(
         }
         finally
         {
-            Interlocked.Decrement(ref _waitingGetRequests);
+            DecrementWaiting();
         }
     }
 
@@ -162,6 +162,7 @@ public class ProxyPool(
         if (options.RemoveAfterGet)
         {
             _storage.RemoveAsync(proxy.Id).GetAwaiter().GetResult();
+            RemoveState(proxy.State);
             return;
         }
 
@@ -169,7 +170,7 @@ public class ProxyPool(
         if (TryAssignWaiter(proxy))
         {
             SetStateAsync(proxy, ProxyState.InUse).GetAwaiter().GetResult();
-            Interlocked.Increment(ref _successfulGetRequests);
+            RecordGetSuccess();
         }
     }
 
@@ -184,6 +185,7 @@ public class ProxyPool(
         if (options.RemoveAfterGet)
         {
             _storage.RemoveAsync(proxy.Id).GetAwaiter().GetResult();
+            RemoveState(proxy.State);
             return;
         }
 
@@ -193,15 +195,7 @@ public class ProxyPool(
         SetStateAsync(proxy, nextState).GetAwaiter().GetResult();
     }
 
-    public ProxyPoolSnapshot GetSnapshot()
-    {
-        var snapshot = _storage.GetSnapshotAsync().GetAwaiter().GetResult();
-        snapshot.TotalGetRequests = Interlocked.Read(ref _totalGetRequests);
-        snapshot.SuccessfulGetRequests = Interlocked.Read(ref _successfulGetRequests);
-        snapshot.WaitingGetRequests = Interlocked.Read(ref _waitingGetRequests);
-        snapshot.Timestamp = DateTime.UtcNow;
-        return snapshot;
-    }
+    public IProxyPoolState CurrentState => _state;
 
     /// <summary>
     /// Current validation worker concurrency.
@@ -237,13 +231,12 @@ public class ProxyPool(
 
     private async Task FetchOnceAsync(CancellationToken ct)
     {
-        var snapshot = await _storage.GetSnapshotAsync(ct).ConfigureAwait(false);
-        if (snapshot.TotalCount >= options.MaxPoolSize)
+        if (GetTotalCount() >= options.MaxPoolSize)
         {
             return;
         }
 
-        var need = Math.Min(options.FetchBatchSize, options.MaxPoolSize - snapshot.TotalCount);
+        var need = Math.Min(options.FetchBatchSize, options.MaxPoolSize - GetTotalCount());
         if (need <= 0)
         {
             return;
@@ -261,6 +254,7 @@ public class ProxyPool(
 
                 proxy.State = ProxyState.Pending;
                 await _storage.AddAsync(proxy, ct).ConfigureAwait(false);
+                AddState(proxy.State);
                 await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
             }
         }
@@ -272,27 +266,29 @@ public class ProxyPool(
         {
             await SetStateAsync(proxy, ProxyState.Expired, ct).ConfigureAwait(false);
             await _storage.RemoveAsync(proxy.Id, ct).ConfigureAwait(false);
+            RemoveState(proxy.State);
             return;
         }
 
         await SetStateAsync(proxy, ProxyState.Validating, ct).ConfigureAwait(false);
         var result = await _validator.ValidateAsync(proxy, ct).ConfigureAwait(false);
-        lock (proxy)
-        {
-            proxy.Statistics.RecordValidation(result);
-        }
+            lock (proxy)
+            {
+                proxy.Statistics.RecordValidation(result);
+            }
 
             _eventSink.OnProxyValidated(proxy, result);
+            RecordValidation(result);
 
-        if (result.IsSuccess)
-        {
-            await SetStateAsync(proxy, ProxyState.Available, ct).ConfigureAwait(false);
-            if (TryAssignWaiter(proxy))
+            if (result.IsSuccess)
             {
-                await SetStateAsync(proxy, ProxyState.InUse, ct).ConfigureAwait(false);
-                Interlocked.Increment(ref _successfulGetRequests);
+                await SetStateAsync(proxy, ProxyState.Available, ct).ConfigureAwait(false);
+                if (TryAssignWaiter(proxy))
+                {
+                    await SetStateAsync(proxy, ProxyState.InUse, ct).ConfigureAwait(false);
+                    RecordGetSuccess();
+                }
             }
-        }
         else
         {
             var nextState = proxy.Statistics.ConsecutiveFailCount >= options.MaxConsecutiveFailCount
@@ -426,8 +422,9 @@ public class ProxyPool(
         }
 
         await _storage.UpdateAsync(proxy, ct).ConfigureAwait(false);
+        UpdateStateChange(oldState, state);
         _eventSink.OnProxyStateChanged(proxy, oldState, state);
-        _eventSink.OnPoolStateChanged(GetSnapshot());
+        _eventSink.OnPoolStateChanged(_state);
     }
 
     private bool TryAssignWaiter(ProxyInfo proxy)
@@ -450,4 +447,76 @@ public class ProxyPool(
 
     private bool IsExpired(ProxyInfo proxy)
         => DateTime.UtcNow - proxy.Statistics.CreatedAt >= options.ProxyExpireTime;
+
+    private int GetTotalCount()
+    {
+        lock (_stateLock)
+        {
+            return _state.TotalCount;
+        }
+    }
+
+    private void AddState(ProxyState state)
+    {
+        lock (_stateLock)
+        {
+            _state.AddProxy(state);
+        }
+    }
+
+    private void RemoveState(ProxyState state)
+    {
+        lock (_stateLock)
+        {
+            _state.RemoveProxy(state);
+        }
+    }
+
+    private void UpdateStateChange(ProxyState oldState, ProxyState newState)
+    {
+        lock (_stateLock)
+        {
+            _state.ChangeState(oldState, newState);
+        }
+    }
+
+    private void RecordValidation(ValidationResult result)
+    {
+        lock (_stateLock)
+        {
+            _state.RecordValidation(result);
+        }
+    }
+
+    private void RecordGetRequest()
+    {
+        lock (_stateLock)
+        {
+            _state.RecordGetRequest();
+        }
+    }
+
+    private void RecordGetSuccess()
+    {
+        lock (_stateLock)
+        {
+            _state.RecordGetSuccess();
+        }
+    }
+
+    private void IncrementWaiting()
+    {
+        lock (_stateLock)
+        {
+            _state.IncrementWaiting();
+        }
+    }
+
+    private void DecrementWaiting()
+    {
+        lock (_stateLock)
+        {
+            _state.DecrementWaiting();
+        }
+    }
 }

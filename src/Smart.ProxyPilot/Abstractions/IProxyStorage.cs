@@ -41,10 +41,5 @@ public interface IProxyStorage
     /// <returns>代理列表。</returns>
     ValueTask<IReadOnlyList<ProxyInfo>> GetByStateAsync(ProxyState state, CancellationToken ct = default);
 
-    /// <summary>
-    /// 获取池快照统计。
-    /// </summary>
-    /// <param name="ct">取消令牌。</param>
-    /// <returns>池快照。</returns>
-    ValueTask<ProxyPoolSnapshot> GetSnapshotAsync(CancellationToken ct = default);
+    
 }

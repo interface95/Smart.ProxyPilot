@@ -13,7 +13,7 @@ public class NullProxyEventSink() : IProxyEventSink
     {
     }
 
-    public void OnPoolStateChanged(ProxyPoolSnapshot snapshot)
+    public void OnPoolStateChanged(IProxyPoolState state)
     {
     }
 }

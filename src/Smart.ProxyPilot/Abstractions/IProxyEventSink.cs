@@ -22,6 +22,6 @@ public interface IProxyEventSink
     /// <summary>
     /// 池状态变更回调。
     /// </summary>
-    /// <param name="snapshot">快照。</param>
-    void OnPoolStateChanged(ProxyPoolSnapshot snapshot);
+    /// <param name="state">池状态。</param>
+    void OnPoolStateChanged(IProxyPoolState state);
 }

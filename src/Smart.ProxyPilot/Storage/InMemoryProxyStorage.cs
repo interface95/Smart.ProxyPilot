@@ -50,43 +50,4 @@ public class InMemoryProxyStorage() : IProxyStorage
         return ValueTask.FromResult<IReadOnlyList<ProxyInfo>>(list);
     }
 
-    /// <summary>
-    /// 获取池快照统计。
-    /// </summary>
-    public ValueTask<ProxyPoolSnapshot> GetSnapshotAsync(CancellationToken ct = default)
-    {
-        var proxies = _proxies.Values.ToList();
-        var snapshot = new ProxyPoolSnapshot
-        {
-            TotalCount = proxies.Count,
-            PendingCount = proxies.Count(p => p.State == ProxyState.Pending),
-            ValidatingCount = proxies.Count(p => p.State == ProxyState.Validating),
-            AvailableCount = proxies.Count(p => p.State == ProxyState.Available),
-            InUseCount = proxies.Count(p => p.State == ProxyState.InUse),
-            CooldownCount = proxies.Count(p => p.State == ProxyState.Cooldown),
-            DisabledCount = proxies.Count(p => p.State == ProxyState.Disabled)
-        };
-
-        var totalValidations = proxies.Sum(p => p.Statistics.TotalValidationCount);
-        var successValidations = proxies.Sum(p => p.Statistics.ValidationSuccessCount);
-        var failedValidations = proxies.Sum(p => p.Statistics.ValidationFailCount);
-        snapshot.TotalValidations = totalValidations;
-        snapshot.SuccessfulValidations = successValidations;
-        snapshot.FailedValidations = failedValidations;
-
-        snapshot.AvgValidationTime = totalValidations > 0
-            ? proxies.Sum(p => p.Statistics.AvgResponseTime * p.Statistics.TotalValidationCount) / totalValidations
-            : 0;
-        snapshot.AvgResponseTime = proxies.Count > 0
-            ? proxies.Average(p => p.Statistics.AvgResponseTime)
-            : 0;
-        snapshot.OverallSuccessRate = totalValidations > 0
-            ? (double)successValidations / totalValidations
-            : 0;
-
-        snapshot.TotalGetRequests = proxies.Sum(p => p.Statistics.TotalUseCount);
-        snapshot.SuccessfulGetRequests = proxies.Sum(p => p.Statistics.UseSuccessCount);
-        snapshot.WaitingGetRequests = 0;
-        return ValueTask.FromResult(snapshot);
-    }
 }

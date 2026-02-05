@@ -27,18 +27,5 @@ public class InMemoryProxyStorageTests
         Assert.Null(afterRemove);
     }
 
-    [Fact]
-    public async Task GetSnapshot_ShouldAggregate()
-    {
-        // Tests snapshot aggregation.
-        var storage = new InMemoryProxyStorage();
-        var proxy = new ProxyInfo("1.1.1.1", 8080, ProxyType.Http);
-        proxy.Statistics.RecordValidation(ValidationResult.Success(TimeSpan.FromMilliseconds(10), 200));
-        await storage.AddAsync(proxy);
-
-        var snapshot = await storage.GetSnapshotAsync();
-        Assert.Equal(1, snapshot.TotalCount);
-        Assert.Equal(1, snapshot.TotalValidations);
-        Assert.Equal(1, snapshot.SuccessfulValidations);
-    }
+    
 }

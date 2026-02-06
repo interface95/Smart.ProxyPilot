@@ -64,6 +64,14 @@ public class ProxyPoolOptions()
     public TimeSpan FetchInterval { get; set; } = TimeSpan.FromMinutes(1);
 
     /// <summary>
+    /// 可用代理达到该阈值后，新拉取的代理将不再进入验证队列。
+    /// </summary>
+    /// <remarks>
+    /// null 或 &lt;= 0 表示不启用。
+    /// </remarks>
+    public int? MaxAvailableCountForValidation { get; set; }
+
+    /// <summary>
     /// 事件回调接收器。
     /// </summary>
     public Abstractions.IProxyEventSink? EventSink { get; set; }

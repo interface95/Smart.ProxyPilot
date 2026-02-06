@@ -52,7 +52,35 @@ public class ProxyPool(
         _backgroundTasks.Add(Task.Run(() => RevalidateLoopAsync(_cts.Token), _cts.Token));
         _backgroundTasks.Add(Task.Run(() => CooldownLoopAsync(_cts.Token), _cts.Token));
 
+        await InitializeStateFromStorageAsync(_cts.Token).ConfigureAwait(false);
+
         await FetchOnceAsync(_cts.Token).ConfigureAwait(false);
+    }
+
+    private async Task InitializeStateFromStorageAsync(CancellationToken ct)
+    {
+        var proxies = new List<ProxyInfo>();
+        foreach (var state in new[]
+                 {
+                     ProxyState.Pending,
+                     ProxyState.Validating,
+                     ProxyState.Available,
+                     ProxyState.InUse,
+                     ProxyState.Cooldown,
+                     ProxyState.Disabled
+                 })
+        {
+            var items = await _storage.GetByStateAsync(state, ct).ConfigureAwait(false);
+            proxies.AddRange(items);
+        }
+
+        lock (_stateLock)
+        {
+            foreach (var proxy in proxies)
+            {
+                _state.AddProxy(proxy.State);
+            }
+        }
     }
 
     public async Task StopAsync(CancellationToken ct = default)
@@ -255,8 +283,24 @@ public class ProxyPool(
                 proxy.State = ProxyState.Pending;
                 await _storage.AddAsync(proxy, ct).ConfigureAwait(false);
                 AddState(proxy.State);
-                await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
+                if (ShouldEnqueueFetchedProxyForValidation())
+                {
+                    await _validationChannel.Writer.WriteAsync(proxy, ct).ConfigureAwait(false);
+                }
             }
+        }
+    }
+
+    private bool ShouldEnqueueFetchedProxyForValidation()
+    {
+        if (options.MaxAvailableCountForValidation is null || options.MaxAvailableCountForValidation <= 0)
+        {
+            return true;
+        }
+
+        lock (_stateLock)
+        {
+            return _state.AvailableCount < options.MaxAvailableCountForValidation.Value;
         }
     }
 

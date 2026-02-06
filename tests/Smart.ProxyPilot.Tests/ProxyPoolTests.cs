@@ -111,4 +111,51 @@ public class ProxyPoolTests
 
         await pool.StopAsync();
     }
+
+    [Fact]
+    public async Task Fetch_ShouldNotEnqueueValidation_WhenAvailableCountReachedThreshold()
+    {
+        var availableProxy = new ProxyInfo("9.9.9.9", 8080, ProxyType.Http)
+        {
+            State = ProxyState.Available
+        };
+        availableProxy.Statistics.RecordValidation(ValidationResult.Success(TimeSpan.FromMilliseconds(5), 200));
+
+        var provider = new MockProxyProvider([
+            new ProxyInfo("1.1.1.1", 8080, ProxyType.Http),
+            new ProxyInfo("2.2.2.2", 8080, ProxyType.Http)
+        ]);
+
+        var validator = new MockProxyValidator
+        {
+            ValidateFunc = _ => ValidationResult.Success(TimeSpan.FromMilliseconds(10), 200)
+        };
+
+        var storage = new InMemoryProxyStorage();
+        await storage.AddAsync(availableProxy);
+
+        var options = new ProxyPoolOptions
+        {
+            MaxPoolSize = 10,
+            FetchBatchSize = 2,
+            FetchInterval = TimeSpan.FromMilliseconds(20),
+            ValidationInterval = TimeSpan.FromMinutes(10),
+            MaxAvailableCountForValidation = 1,
+            ValidationConcurrency = 1
+        };
+
+        var pool = new ProxyPool(options, [provider], validator, new RoundRobinScheduler(), storage);
+        await pool.StartAsync();
+
+        await Task.Delay(150);
+
+        var fetched1 = await storage.GetByIdAsync("1.1.1.1:8080");
+        var fetched2 = await storage.GetByIdAsync("2.2.2.2:8080");
+        Assert.NotNull(fetched1);
+        Assert.NotNull(fetched2);
+        Assert.Equal(ProxyState.Pending, fetched1!.State);
+        Assert.Equal(ProxyState.Pending, fetched2!.State);
+
+        await pool.StopAsync();
+    }
 }
